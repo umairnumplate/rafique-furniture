@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useReducer, useEffect } from 'react';
-import type { Product, Category, Order, OrderLine } from '../types';
+import type { Product, Category, Order, OrderLine, Payment } from '../types';
 import { PRODUCTS, CATEGORIES } from '../data/mockData';
 import useLocalStorage from '../hooks/useLocalStorage';
 
@@ -11,16 +11,22 @@ interface AppState {
   currentOrder: Order;
   savedOrders: Order[];
   theme: Theme;
+  isEditingOrder: boolean; // To track if we are editing a saved order
 }
 
 type Action =
   | { type: 'ADD_PRODUCT_TO_ORDER'; payload: Product }
-  | { type: 'UPDATE_ORDER_LINE'; payload: { productId: string; quantity: number; price: number } }
-  | { type: 'REMOVE_ORDER_LINE'; payload: string }
+  | { type: 'ADD_CUSTOM_ITEM_TO_ORDER'; payload: { name: string; quantity: number; price: number; note?: string } }
+  | { type: 'UPDATE_ORDER_LINE_DETAILS'; payload: { lineId: string; quantity?: number; price?: number; note?: string } }
+  | { type: 'REMOVE_ORDER_LINE'; payload: string } // payload is lineId
   | { type: 'UPDATE_CUSTOMER_DETAILS'; payload: { name: string; value: string } }
+  | { type: 'ADD_PAYMENT_TO_SAVED_ORDER'; payload: { orderId: string; amount: number } }
+  | { type: 'ADD_PAYMENT'; payload: number }
+  | { type: 'REMOVE_PAYMENT'; payload: string }
   | { type: 'SAVE_ORDER' }
+  | { type: 'DELETE_SAVED_ORDER'; payload: string }
   | { type: 'CLEAR_ORDER' }
-  | { type: 'LOAD_ORDER'; payload: Order }
+  | { type: 'LOAD_ORDER'; payload: { order: Order; isEditing: boolean } }
   | { type: 'TOGGLE_THEME' }
   | { type: 'SET_PRODUCTS'; payload: Product[] }
   | { type: 'ADD_PRODUCT'; payload: Product }
@@ -37,13 +43,20 @@ const getInitialOrder = (): Order => ({
   customerPhone: '',
   customerAddress: '',
   orderLines: [],
+  payments: [],
   total: 0,
+  paidAmount: 0,
+  balanceDue: 0,
   createdAt: new Date().toISOString(),
+  notes: '',
 });
 
-const calculateTotal = (lines: OrderLine[]): number => {
-  return lines.reduce((acc, line) => acc + line.price * line.quantity, 0);
-};
+const recalculateOrderFinancials = (order: Order): Order => {
+    const total = order.orderLines.reduce((acc, line) => acc + line.price * line.quantity, 0);
+    const paidAmount = order.payments.reduce((acc, p) => acc + p.amount, 0);
+    const balanceDue = total - paidAmount;
+    return { ...order, total, paidAmount, balanceDue };
+}
 
 const initialState: AppState = {
   products: PRODUCTS,
@@ -51,6 +64,7 @@ const initialState: AppState = {
   currentOrder: getInitialOrder(),
   savedOrders: [],
   theme: 'light',
+  isEditingOrder: false,
 };
 
 const AppContext = createContext<{
@@ -77,53 +91,65 @@ const appReducer = (state: AppState, action: Action): AppState => {
             : line
         );
       } else {
-        newOrderLines = [
-          ...state.currentOrder.orderLines,
-          {
+        const newLine: OrderLine = {
+            lineId: `line-${Date.now()}`,
             productId: product.id,
-            nameSnapshot: product.name,
+            name: product.name,
             price: product.basePrice,
             quantity: 1,
-            imageUrlSnapshot: product.imageUrl,
-          },
-        ];
+            imageUrl: product.imageUrl,
+            addedAt: new Date().toISOString(),
+            isAddedLater: state.isEditingOrder,
+            note: '',
+        };
+        newOrderLines = [...state.currentOrder.orderLines, newLine];
       }
-      return {
-        ...state,
-        currentOrder: {
+      const updatedOrder = recalculateOrderFinancials({
           ...state.currentOrder,
           orderLines: newOrderLines,
-          total: calculateTotal(newOrderLines),
-        },
-      };
+      });
+      return { ...state, currentOrder: updatedOrder };
     }
-    case 'UPDATE_ORDER_LINE': {
-        const { productId, quantity, price } = action.payload;
-        const newOrderLines = state.currentOrder.orderLines.map((line) =>
-            line.productId === productId ? { ...line, quantity, price } : line
-        );
-        return {
-            ...state,
-            currentOrder: {
-                ...state.currentOrder,
-                orderLines: newOrderLines,
-                total: calculateTotal(newOrderLines),
-            },
+    case 'ADD_CUSTOM_ITEM_TO_ORDER': {
+        const { name, quantity, price, note } = action.payload;
+        const newCustomLine: OrderLine = {
+            lineId: `line-${Date.now()}`,
+            name,
+            price,
+            quantity,
+            imageUrl: `https://picsum.photos/seed/${name.replace(/\s+/g, '-')}/400/400`,
+            addedAt: new Date().toISOString(),
+            isAddedLater: state.isEditingOrder,
+            note: note || '',
         };
+        const newOrderLines = [...state.currentOrder.orderLines, newCustomLine];
+        const updatedOrder = recalculateOrderFinancials({
+            ...state.currentOrder,
+            orderLines: newOrderLines,
+        });
+        return { ...state, currentOrder: updatedOrder };
+    }
+    case 'UPDATE_ORDER_LINE_DETAILS': {
+        const { lineId, ...details } = action.payload;
+        const newOrderLines = state.currentOrder.orderLines.map((line) =>
+            line.lineId === lineId ? { ...line, ...details } : line
+        );
+        const updatedOrder = recalculateOrderFinancials({
+            ...state.currentOrder,
+            orderLines: newOrderLines,
+        });
+        return { ...state, currentOrder: updatedOrder };
     }
     case 'REMOVE_ORDER_LINE': {
-        const productIdToRemove = action.payload;
+        const lineIdToRemove = action.payload;
         const newOrderLines = state.currentOrder.orderLines.filter(
-            (line) => line.productId !== productIdToRemove
+            (line) => line.lineId !== lineIdToRemove
         );
-        return {
-            ...state,
-            currentOrder: {
-                ...state.currentOrder,
-                orderLines: newOrderLines,
-                total: calculateTotal(newOrderLines),
-            },
-        };
+        const updatedOrder = recalculateOrderFinancials({
+            ...state.currentOrder,
+            orderLines: newOrderLines,
+        });
+        return { ...state, currentOrder: updatedOrder };
     }
     case 'UPDATE_CUSTOMER_DETAILS': {
       return {
@@ -134,19 +160,81 @@ const appReducer = (state: AppState, action: Action): AppState => {
         },
       };
     }
+    case 'ADD_PAYMENT': {
+        const newPayment: Payment = {
+            id: `payment-${Date.now()}`,
+            amount: action.payload,
+            date: new Date().toISOString(),
+        };
+        const updatedOrder = recalculateOrderFinancials({
+            ...state.currentOrder,
+            payments: [...state.currentOrder.payments, newPayment]
+        });
+        return { ...state, currentOrder: updatedOrder };
+    }
+    case 'ADD_PAYMENT_TO_SAVED_ORDER': {
+        const { orderId, amount } = action.payload;
+        const newSavedOrders = state.savedOrders.map(order => {
+            if (order.id === orderId) {
+                const newPayment: Payment = {
+                    id: `payment-${Date.now()}`,
+                    amount: amount,
+                    date: new Date().toISOString(),
+                };
+                const updatedOrderWithPayment = {
+                    ...order,
+                    payments: [...order.payments, newPayment],
+                };
+                return recalculateOrderFinancials(updatedOrderWithPayment);
+            }
+            return order;
+        });
+        return { ...state, savedOrders: newSavedOrders };
+    }
+    case 'REMOVE_PAYMENT': {
+        const paymentIdToRemove = action.payload;
+        const updatedPayments = state.currentOrder.payments.filter(p => p.id !== paymentIdToRemove);
+        const updatedOrder = recalculateOrderFinancials({
+            ...state.currentOrder,
+            payments: updatedPayments,
+        });
+        return { ...state, currentOrder: updatedOrder };
+    }
     case 'SAVE_ORDER': {
-      const orderToSave = { ...state.currentOrder, createdAt: new Date().toISOString() };
+      const orderToSave = { ...state.currentOrder };
+      if(!orderToSave.createdAt) {
+        orderToSave.createdAt = new Date().toISOString();
+      }
+      const existingOrderIndex = state.savedOrders.findIndex(o => o.id === orderToSave.id);
+
+      let newSavedOrders;
+      if (existingOrderIndex > -1) {
+        newSavedOrders = [...state.savedOrders];
+        newSavedOrders[existingOrderIndex] = orderToSave;
+      } else {
+        newSavedOrders = [orderToSave, ...state.savedOrders];
+      }
+      
+      newSavedOrders.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+
       return {
         ...state,
-        savedOrders: [orderToSave, ...state.savedOrders],
+        savedOrders: newSavedOrders,
         currentOrder: getInitialOrder(),
+        isEditingOrder: false,
       };
     }
+    case 'DELETE_SAVED_ORDER': {
+      return {
+        ...state,
+        savedOrders: state.savedOrders.filter(o => o.id !== action.payload)
+      }
+    }
     case 'CLEAR_ORDER': {
-      return { ...state, currentOrder: getInitialOrder() };
+      return { ...state, currentOrder: getInitialOrder(), isEditingOrder: false };
     }
     case 'LOAD_ORDER': {
-        return {...state, currentOrder: action.payload};
+        return {...state, currentOrder: action.payload.order, isEditingOrder: action.payload.isEditing };
     }
     case 'TOGGLE_THEME': {
       const newTheme = state.theme === 'light' ? 'dark' : 'light';

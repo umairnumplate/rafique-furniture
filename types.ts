@@ -1,4 +1,3 @@
-
 export interface Product {
   id: string;
   sku: string;
@@ -16,11 +15,21 @@ export interface Category {
 }
 
 export interface OrderLine {
-  productId: string;
-  nameSnapshot: string;
+  lineId: string; // Unique ID for this specific line item
+  productId?: string; // Will be undefined for custom/other items
+  name: string;
   price: number;
   quantity: number;
-  imageUrlSnapshot: string;
+  imageUrl: string;
+  addedAt: string; // ISO string date for when the item was added to the order
+  isAddedLater: boolean; // True if added after the order was first created
+  note?: string; // Optional item-specific note
+}
+
+export interface Payment {
+  id:string;
+  amount: number;
+  date: string;
 }
 
 export interface Order {
@@ -29,6 +38,10 @@ export interface Order {
   customerPhone: string;
   customerAddress: string;
   orderLines: OrderLine[];
+  payments: Payment[];
   total: number;
+  paidAmount: number;
+  balanceDue: number;
   createdAt: string; 
+  notes?: string;
 }

@@ -1,4 +1,3 @@
-
 import React, { useState } from 'react';
 import { AppProvider } from './context/AppContext';
 import Header from './components/Header';
@@ -35,7 +34,7 @@ const App: React.FC = () => {
         }
         return <ProductList category={selectedCategory} />;
       case 'ORDER':
-        return <OrderView />;
+        return <OrderView navigateTo={navigateTo} />;
       case 'HISTORY':
         return <OrderHistory navigateTo={navigateTo}/>;
       case 'ADMIN':
