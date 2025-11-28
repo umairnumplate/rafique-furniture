@@ -1,0 +1,49 @@
+
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Rafiq Furniture House</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+      tailwind.config = {
+        darkMode: 'class',
+        theme: {
+          extend: {
+            colors: {
+              primary: {
+                DEFAULT: '#4a90e2',
+                dark: '#357abd',
+                light: '#a4c8f0'
+              },
+              secondary: '#50e3c2',
+              background: '#f8f9fa',
+              dark: {
+                background: '#121212',
+                surface: '#1e1e1e',
+                primary: '#bb86fc',
+                secondary: '#03dac6',
+                onPrimary: '#000000',
+                onSurface: '#ffffff',
+              }
+            },
+          },
+        },
+      }
+    </script>
+  <script type="importmap">
+{
+  "imports": {
+    "react-dom/": "https://aistudiocdn.com/react-dom@^19.2.0/",
+    "react/": "https://aistudiocdn.com/react@^19.2.0/",
+    "react": "https://aistudiocdn.com/react@^19.2.0"
+  }
+}
+</script>
+</head>
+  <body class="bg-background dark:bg-dark-background text-gray-800 dark:text-dark-onSurface">
+    <div id="root"></div>
+    <script type="module" src="/index.tsx"></script>
+  </body>
+</html>

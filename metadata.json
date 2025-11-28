@@ -1,0 +1,7 @@
+{
+  "name": "Rafiq Furniture House",
+  "description": "A mobile-first app to browse furniture products, create customer orders, calculate totals, save orders, and share them via WhatsApp. Includes admin controls for product management and an Excel import/export feature.",
+  "requestFramePermissions": [
+    "camera"
+  ]
+}
